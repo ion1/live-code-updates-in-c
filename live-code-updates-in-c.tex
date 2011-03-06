@@ -1,0 +1,161 @@
+\documentclass{beamer}
+\usetheme{default}
+
+\usepackage{xltxtra,xunicode}
+
+\usepackage{polyglossia}
+\setdefaultlanguage{english}
+
+\usepackage{minted}
+
+\setlength{\parskip}{\medskipamount}
+\setlength{\parindent}{0pt}
+
+\title{Live code updates in C}
+\subtitle{What we might learn from Erlang}
+\author{Johan Kiviniemi}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+\begin{frame}{Introduction}
+  Erlang has a built-in facility for easy and robust live code updates.
+
+  I’ll describe what Erlang is doing first, and then contemplate how we could
+  imitate that in a single-threaded C program based on a libnih main loop.
+
+  Erlang/OTP comes with abstraction layers one typically uses, but I’ll use
+  low-level Erlang in the examples to make everything that happens explicit.
+\end{frame}
+
+\begin{frame}[fragile]{A simple server}
+  An Erlang module implementing a server pattern might look as follows:
+
+  \begin{figure}[H]
+    \inputminted[lastline=13]{erlang}{pingpong-00.erl}
+    \caption{\texttt{pingpong.erl}: The API}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]
+  \begin{figure}[H]
+    \inputminted[firstline=15]{erlang}{pingpong-00.erl}
+    \caption{\texttt{pingpong.erl}: The server}
+  \end{figure}
+\end{frame}
+
+\begin{frame}[fragile]{The code explained}
+  Let’s go over the code.
+
+  \inputminted[firstline=6,lastline=7]{erlang}{pingpong-00.erl}
+
+  The \verb|start| function takes an arbitrary name to identify an instance and
+  spawns a process – Erlang jargon for an extremely lightweight thread – using
+  \verb|spawn_link|, returning the new process ID.
+
+  The parameters to \verb|spawn_link|:
+
+  \begin{itemize}
+    \item \verb|?MODULE| refers to the current module.
+
+    \item \verb|loop| refers to the name of the main loop function for the
+    process (within \verb|?MODULE|).
+
+    \item The third parameter provides a list of parameters to which
+    \verb|?MODULE:loop| is applied to. In this case, just a single parameter,
+    the tuple \verb|{pingpong, Name}| where \verb|Name| came from the caller.
+    This represents the initial state for the loop.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \inputminted[firstline=9,lastline=9]{erlang}{pingpong-00.erl}
+
+  The \verb|ping| function is evaluated by a caller, not the server spawned by
+  \verb|start|. It sends a message to the server and returns the result.
+  \verb|ping| is applied to the pid returned by start.
+
+  \inputminted[firstline=10,lastline=10]{erlang}{pingpong-00.erl}
+
+  \verb|Pid ! Message| is Erlang’s internal syntax for IPC. Each process has a
+  mailbox to which any process can add messages by means of the \verb|!|
+  operator.
+
+  In this case, the message \verb|{ping, self()}| is added to the server’s
+  mailbox. \verb|self()| returns the pid of the current process. We add that to
+  the message so that the server knows where to send the reply. (This is the
+  kind of stuff the abstraction modules would handle normally.)
+\end{frame}
+
+\begin{frame}[fragile]
+  \inputminted[firstline=11,lastline=13]{erlang}{pingpong-00.erl}
+
+  The \verb|receive| construct takes a list of patterns to match against the
+  mailbox.  The first message in the mailbox to match one of the patterns is
+  removed and handled by the handler. If no messages match, \verb|receive|
+  blocks until a matching message is received or an optional timeout occurs.
+\end{frame}
+
+\begin{frame}[fragile]
+  \inputminted[firstline=17,lastline=17]{erlang}{pingpong-00.erl}
+
+  The \verb|loop| function implements the server. It’s run in a separate
+  process created by the \verb|spawn_link| call.
+
+  The strange-looking argument matcher simply means that the function
+  definition only matches a tuple parameter that looks like
+  \verb|{pingpong, SOMETHING}|, where the entire tuple is assigned to the
+  variable \verb|State| and the \emph{something} is assigned to the variable
+  \verb|Name|.
+\end{frame}
+
+\begin{frame}[fragile]
+  The function body consists of just a \verb|receive| construct.
+
+  \inputminted[firstline=18,lastline=21]{erlang}{pingpong-00.erl}
+
+  When the message \verb|{ping, SOMETHING}| is received, the \emph{something}
+  is assigned to \verb|Sender|, and the message \verb|{pong, self(), {Name}}|
+  is sent to it. \verb|Name| came from the state parameter, and ultimately from
+  the original parameter to \verb|start|.
+
+  To get back to the beginning of the loop in order to handle the next incoming
+  message, we call ourselves again (\verb|loop(State)|) and the tail recursion
+  optimization converts that to not much more than a jump.
+\end{frame}
+
+\begin{frame}[fragile]
+  It’s important to note a few things:
+
+  \begin{itemize}
+    \item The entire state of the process is on the \emph{stack}.
+
+    \item Execution proceeds back to the beginning of the loop by using a tail
+    call.
+
+    \item The new state for the process is given as a parameter to the tail
+    call.  (So far we haven’t modified the state.)
+
+    \item \verb|loop(State)| refers to the \verb|loop| function in the
+    \emph{current} version of the module, whereas \verb|?MODULE:loop(State)|
+    would refer to the \verb|loop| function in the \emph{newest} version of the
+    module. Those two can differ when a new version of the module has been
+    loaded.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  The current code behaves as follows:
+
+  \inputminted{erlang}{pingpong-00-example.erl-sh}
+\end{frame}
+
+\begin{frame}[fragile]
+  Now that we’ve got the basics out of the way, let’s make the module friendly
+  to runtime code upgrades.
+\end{frame}
+
+\end{document}

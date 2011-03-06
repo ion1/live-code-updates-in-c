@@ -1,0 +1,14 @@
+1> c(pingpong).   % Compile and load.
+{ok,pingpong}
+
+2> Server = pingpong:start("server 0").
+<0.42.0>
+
+3> pingpong:ping(Server).
+{ok,{"server 0"}}
+
+4> pingpong:ping(Server).
+{ok,{"server 0"}}
+
+5> pingpong:ping(Server).
+{ok,{"server 0"}}
