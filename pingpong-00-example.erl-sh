@@ -1,6 +1,7 @@
-1> c(pingpong).   % Compile and load.
+1> c(pingpong).  % Compile and load.
 {ok,pingpong}
 
+% Give a server instance a name.
 2> Server = pingpong:start("server 0").
 <0.42.0>
 
