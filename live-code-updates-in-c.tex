@@ -32,7 +32,13 @@
 \end{frame}
 
 \begin{frame}[fragile]{A simple server}
-  An Erlang module implementing a server pattern might look as follows:
+  An Erlang module implementing a server pattern might behave as follows:
+
+  \inputminted{erlang}{pingpong-00-example.erl-sh}
+\end{frame}
+
+\begin{frame}[fragile]
+  The implementation might look as follows:
 
   \begin{figure}[H]
     \inputminted[lastline=13]{erlang}{pingpong-00.erl}
@@ -145,12 +151,6 @@
     module. Those two can differ when a new version of the module has been
     loaded.
   \end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]
-  The current code behaves as follows:
-
-  \inputminted{erlang}{pingpong-00-example.erl-sh}
 \end{frame}
 
 \begin{frame}[fragile]
